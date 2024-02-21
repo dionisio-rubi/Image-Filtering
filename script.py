@@ -10,22 +10,32 @@ filter_size = 5
 sigma = 1
 theta = math.pi/2
 #Load and display image
-img = p1.load_img("test_img.jpg")
-# img = p1.load_img("image.jpg") # colored image
-# img = p1.load_img("sp.jpg")
+img = p1.load_img("images/test_img.jpg")
+# img = p1.load_img("images/image.jpg") # colored image
+# img = p1.load_img("images/sp.jpg")
 # p1.display_img(img)
 
 #Generate 1D gaussian filter
 gaussian1D = p1.generate_gaussian(sigma, filter_size, 1)
+# print(gaussian1D, sum(gaussian1D))
 
 #Filter image with 1D gaussian
-# filtered_img = p1.apply_filter(img, gaussian1D, 0, 0)
+filtered_img = p1.apply_filter(img, gaussian1D, 0, 0)
+# exam = cv2.GaussianBlur(img, (filter_size, 1), sigma)
+# compare = np.concatenate((img, filtered_img, exam), axis=1)
+# p1.display_img(compare)
+p1.display_img(filtered_img)
 
 #Generate 2D gaussian filter
-# gaussian2D = p1.generate_gaussian(sigma, filter_size, filter_size)
+gaussian2D = p1.generate_gaussian(sigma, filter_size, filter_size)
+# print(gaussian2D, sum(gaussian2D))
 
 #Filter image with 2D gaussian
-# filtered_img = p1.apply_filter(img, gaussian2D, 0, 0)
+filtered_img = p1.apply_filter(img, gaussian2D, 0, 0)
+# exam = cv2.GaussianBlur(img, (filter_size, filter_size), sigma)
+# compare = np.concatenate((img, filtered_img, exam), axis=1)
+# p1.display_img(compare)
+p1.display_img(filtered_img)
 
 #Noise removal with median filter
 # filtered_img = p1.median_filtering(img, filter_size, filter_size)
@@ -46,4 +56,5 @@ gaussian1D = p1.generate_gaussian(sigma, filter_size, 1)
 # p1.display_img(transformed_img)
 
 #Edge Detection
-# filtered_img = p1.edge_detection(img)
+filtered_img = p1.edge_detection(img)
+p1.display_img(filtered_img)

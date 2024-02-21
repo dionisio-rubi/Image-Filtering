@@ -18,8 +18,8 @@ def load_img(file_name):
 
     # https://www.geeksforgeeks.org/python-opencv-cv2-imread-method/
     # used for greyscaling images
-    return cv2.imread(file_name, cv2.IMREAD_GRAYSCALE)
-    # return cv2.imread(file_name)
+    # return cv2.imread(file_name, cv2.IMREAD_GRAYSCALE)
+    return cv2.imread(file_name)
 
 def display_img(image):
     """
@@ -43,27 +43,24 @@ def generate_gaussian(sigma, filter_w, filter_h):
     :return gaussian_filter:
     """
 
-    if (filter_w == 1 or filter_h == 1) and filter_w != filter_h: # 1D filter
+    if (filter_w == 1 or filter_h == 1): # 1D filter
         length = max(filter_w, filter_h) # in case filter_h or filter_w is 1
-        gaussian_filter = np.zeros(length) # 1D array with fixed size, fixed so sum() works
+        gaussian_filter = np.zeros((length, 1)) # 1D array with fixed size, fixed so sum() works
         middle = length // 2
 
         for n in range(length):
             gaussian_filter[n] = math.exp(- ((n - middle)**2) / (2 * sigma**2))
 
-        return gaussian_filter / sum(gaussian_filter)
+        return gaussian_filter / np.sum(gaussian_filter)
 
     else: # 2D filter
-        if filter_w != filter_h: # just in case
-            raise ValueError('filter_w and filter_h must be equal for 2D filter')
+        gaussian_filter = np.zeros((filter_w, filter_h))
+        middle_h, middle_w = filter_h // 2, filter_w // 2
 
-        length = filter_w # doesn't matter if filter_w or filter_h
-        middle = length // 2
-        gaussian_filter = np.zeros((length, length))
-        for y in range(length):
-            for x in range(length):
-                gaussian_filter[y, x] = math.exp(- ((y - middle)**2 + (x - middle)**2) / (2 * sigma**2))
-        return gaussian_filter / sum(gaussian_filter)
+        for y in range(filter_w):
+            for x in range(filter_h):
+                gaussian_filter[y, x] = math.exp(- ((y - middle_w)**2 + (x - middle_h)**2) / (2 * sigma**2))
+        return gaussian_filter / np.sum(gaussian_filter)
 
 def apply_filter(image, filter, pad_pixels, pad_value):
     """
@@ -74,32 +71,64 @@ def apply_filter(image, filter, pad_pixels, pad_value):
     :param pad_value:
     :return:
     """
+    if len(image.shape) == 3: # colored images only
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # first pad the image
-    padded_image = []
+    # is_color_image = len(image.shape) == 3
+    # pad the image
     if pad_value == 0:
-        padding = [[0] * pad_pixels for _ in range(len(image[0]) + 2 * pad_pixels)]
+        padded_img = np.pad(image, pad_pixels, mode='constant', constant_values=pad_value)
     else:
-        padding = [image[0][:pad_pixels] for _ in range(pad_pixels)]
+        padded_img = np.pad(image, pad_pixels, mode='edge')
 
-    for row in image:
-        padded_row = padding + row + padding
-        padded_image.append(padded_row)
+    # determine the dimensions of the filter
+    filter_h, filter_w = filter.shape
 
-    # apply the filter
-    filtered_image = []
-    filter_h = len(filter)
-    filter_w = len(filter[0])
+    # determine the dimensions of the image
+    height, width = image.shape
+    # filtered_image = np.zeros((height, width), dtype=image.dtype)
+    filtered_image = np.zeros_like(padded_img)
 
-    for y in range(pad_pixels, len(padded_image) - pad_pixels):
-        filtered_row = []
-        for x in range(pad_pixels, len(padded_image[y]) - pad_pixels):
-            pixel_val = 0
-            for fy in range(filter_h):
-                for fx in range(filter_w):
-                    pixel_val += filter[fy][fx] * padded_image[y + fy - pad_pixels][x + fx - pad_pixels]
-            filtered_row.append(pixel_val)
-        filtered_image.append(filtered_row)
+    # apply filter
+    if filter_h == 1 or filter_w == 1: # 1D filter
+        filter_size = len(filter)
+        pad = filter_size // 2
+
+        for y in range(pad, height - pad):
+            for x in range(pad, width - pad):
+                filtered_image[y, x] = np.sum(padded_img[y - pad:y + pad + 1, x] * filter)
+        filter_size = len(filter)
+        pad = filter_size // 2
+
+        # # Perform 1D convolution
+        # h_padded, _ = padded_img.shape
+        # mask_length = filter.shape[0] - 1
+        # total_padding = 2 * pad_pixels
+        # total_trim_length = max(total_padding, mask_length)
+        #
+        # output_height = h_padded - total_trim_length
+        # output = np.zeros((output_height, width), dtype=float)
+        #
+        # trim_length = total_trim_length // 2
+        # for i in range(trim_length, h_padded - trim_length):
+        #     for j in range(pad, width - pad):
+        #         output[i - trim_length, j - pad] = np.sum(
+        #             padded_img[i, j - pad:j + filter.shape[0] - pad] * filter)
+        #
+        # # Adjust dimensions of filtered_image
+        # filtered_height = output_height
+        # filtered_width = width
+        # filtered_image = np.zeros((filtered_height, filtered_width), dtype=padded_img.dtype)
+        #
+        # # Assign output to filtered_image
+        # filtered_image[:, :] = output
+
+    else: # 2D filter
+        pad_h, pad_w = filter_h // 2, filter_w // 2
+
+        for y in range(pad_h, height - pad_h):
+            for x in range(pad_w, width - pad_w):
+                filtered_image[y, x] = np.sum(padded_img[y - pad_h:y + pad_h + 1, x - pad_w:x + pad_w + 1] * filter)
 
     return filtered_image
 
@@ -229,11 +258,49 @@ def edge_detection(image):
     """
 
     # Step 1: Smoothing (Gaussian filter)
+    gaussian_filter = generate_gaussian(1, 5, 5) # similar to LOG ?
+    gaus1d = generate_gaussian(1, 5, 1)
+    smoothed_image = apply_filter(image, gaussian_filter, 2, 0)
 
-    # Step 2: Enhancement
+
+    # display_img(smoothed_image)
+
+    # Step 2: Enhancement (gradient magnitude)
+    sobel_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    sobel_y = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]])
+
+    # calculate the gradient magnitude
+    gradient_x = apply_filter(smoothed_image, sobel_x, 1, 0)
+    gradient_y = apply_filter(smoothed_image, sobel_y, 1, 0)
+    gradient_magnitude = np.sqrt(gradient_x**2 + gradient_y**2)
+    gradient_magnitude = (gradient_magnitude*255).astype(np.uint8)
+    # display_img(gradient_magnitude)
 
     # Step 3: Detection/Thresholding
+    threshold = 100 # can be changed
+    bw_image = np.where(smoothed_image > threshold, 0, 255)
+    filtered_image = bw_image.astype(np.uint8)
 
-    # Step 4: Localization
+    # display_img(filtered_image)
 
-    return
+    # Step 4: Localization (Canny edge detector, hysteresis thresholding)
+    height, width = filtered_image.shape
+    edge_image = np.zeros((height, width))
+
+    # neighborhood for connectivity
+    neighborhood = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]])
+
+    # locate string edge pixels
+    high_threshold = 255 # can be changed
+    low_threshold = 200 # can be changed
+    strong_pixels = np.where(filtered_image >= high_threshold, 1, 0)
+
+    # perform hysteresis thresholding
+    for y in range(1, height - 1):
+        for x in range(1, width - 1):
+            if strong_pixels[y, x] == 1:
+                edge_image[y, x] = 255
+                edge_image[y-1:y+2, x-1:x+2] += neighborhood * (filtered_image[y-1:y+2, x-1:x+2] >= low_threshold)
+    final_image = np.where(edge_image >= 255, 255, 0).astype(np.uint8)
+    # final_image = apply_filter(image, gaus1d, 0, 0)
+    return final_image
