@@ -1,18 +1,13 @@
-import cv2
-import PIL
-import matplotlib
-import skimage
-import numpy as np
 import math
-import project1 as p1
+from Project1 import project1 as p1
 
 filter_size = 5
 sigma = 1
 theta = math.pi/2
 #Load and display image
-img = p1.load_img("images/test_img.jpg")
-# img = p1.load_img("images/image.jpg") # colored image
-# img = p1.load_img("images/sp.jpg")
+img = p1.load_img("../images/test_img.jpg")
+# img = p1.load_img("../images/image.jpg") # colored image
+# img = p1.load_img("../images/sp.jpg")
 # p1.display_img(img)
 
 #Generate 1D gaussian filter
