@@ -12,6 +12,7 @@ Moravec Detector:
 
 LBP Features:
 
+
 HOG Features:
 
 Feature Matching:

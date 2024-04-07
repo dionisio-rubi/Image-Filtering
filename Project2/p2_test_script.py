@@ -8,11 +8,11 @@ import project2 as p2
 
 
 #Load and display image
-# img1 = p2.load_img("test_img1.jpg")
-img1 = p2.load_img("../images/test_img.jpg")
+img1 = p2.load_img("../images/test_img1.jpg")
+# img1 = p2.load_img("../images/test_img.jpg")
 p2.display_img(img1)
-# img2 = p2.load_img("test_img2.jpg")
-# p2.display_img(img2)
+img2 = p2.load_img("../images/test_img2.jpg")
+p2.display_img(img2)
 
 #Extract Keypoints with Moravec Detector
 keypoints = p2.moravec_detector(img1) 
@@ -22,7 +22,8 @@ key_img = p2.plot_keypoints(img1, keypoints)
 p2.display_img(key_img)
 
 #Perform feature matching with Moravec and LBP
-# matches = p2.feature_matching(img1,img2,"Moravec", "LBP")
+matches = p2.feature_matching(img1,img2,"Moravec", "LBP")
+print(matches)
 # match_img = p2.plot_matches(img1,img2,matches)
 # p2.display_img(match_img)
 
