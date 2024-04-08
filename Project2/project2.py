@@ -317,7 +317,8 @@ def harris_detector(image):
     threshold = 0.5 * np.max(R) # threshold value
     for y in range(1, image.shape[0] - 1):
         for x in range(1, image.shape[1] - 1):
-            if R[y, x] > threshold and R[y, x] > R[y - 1, x - 1] and R[y, x] > R[y - 1, x] and R[y, x] > R[y - 1, x + 1] and R[y, x] > R[y, x - 1] and R[y, x] > R[y, x + 1] and R[y, x] > R[y + 1, x - 1] and R[y, x] > R[y + 1, x] and R[y, x] > R[y + 1, x + 1]:
+            # if R[y, x] > threshold: # check if the R value is greater than the threshold, detects more
+            if R[y, x] > threshold and R[y, x] > R[y - 1, x - 1] and R[y, x] > R[y - 1, x] and R[y, x] > R[y - 1, x + 1] and R[y, x] > R[y, x - 1] and R[y, x] > R[y, x + 1] and R[y, x] > R[y + 1, x - 1] and R[y, x] > R[y + 1, x] and R[y, x] > R[y + 1, x + 1]: # more accurate, detects less in some situations
                 keypoints.append([x, y])
 
     return keypoints
