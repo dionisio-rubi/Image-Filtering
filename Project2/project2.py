@@ -94,13 +94,12 @@ def extract_LBP(image, keypoint):
     :return feature_vector:
     """
     LBP_neighbors = [(1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1), (0, 1)]
-    window_radius = 8
 
     feature_vector = []
     x, y = keypoint
 
     # pad the image
-    padded_image = np.pad(image, ((window_radius, window_radius), (window_radius, window_radius)), mode='edge')
+    padded_image = np.pad(image, ((8, 8), (8, 8)), mode='edge')
 
     # get the 16x16 window
     window = padded_image[y - 8:y + 8, x - 8:x + 8]
