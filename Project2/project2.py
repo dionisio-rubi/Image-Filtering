@@ -27,67 +27,49 @@ def display_img(image):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-# def moravec_detector(image):
-#     """
-#     Assume you’re working with a 3x3 window. This function should return a list of keypoints ((x,y) coordinates) in the image
-#     :param image:
-#     :return list:
-#     """
-#     keypoints = []
-#     threshold = 55000 # might change later, 10000 is a good starting point
-#
-#     padded_image = np.pad(image, ((1, 1), (1, 1)), mode='constant') # pad the image so it doesn't go out of bounds
-#     height, width = padded_image.shape
-#
-#     # iterate over pixels in the new image
-#     for y in range(1, height - 1):
-#         for x in range(1, width - 1):
-#             # need to keep track of all sw
-#             sw_values = []
-#
-#             # will be used to calculate the sum of squared differences in all 8 directions
-#             for dx in [-1, 0, 1]:
-#                 for dy in [-1, 0, 1]:
-#                     if dx == 0 and dy == 0: # skip the center pixel
-#                         continue
-#                     # sw = np.sum((padded_image[y, x] - padded_image[y + dy, x + dx]) ** 2)
-#                     # sw_values.append(sw)
-#                     # Compute SSD within the 3x3 window
-#                     center_pixel = padded_image[y, x]
-#                     neighbor_pixel = padded_image[y + dy, x + dx]
-#                     diff = center_pixel - neighbor_pixel
-#                     sw_values.append(diff ** 2)
-#
-#             min_sw = min(sw_values)
-#
-#             if min_sw > threshold:
-#                 keypoints.append((x - 1, y - 1)) # subtract 1 to get the original image coordinates
-#
-#     return keypoints
+def moravec_detector(image):
+    """
+    Assume you’re working with a 3x3 window. This function should return a list of keypoints ((x,y) coordinates) in the image
+    :param image:
+    :return list:
+    """
+    keypoints = []
+    threshold = 100_000 # might change later, 10000 is a good starting point
 
-def moravec_detector(img):
-    feature_coords = []
-    pad_amt = 2
-    img_padded = np.pad(img, ((pad_amt,pad_amt),(pad_amt,pad_amt)), mode="constant")
-    for y in range(pad_amt+2,len(img_padded)-pad_amt-2):
-        for x in range(pad_amt+2,len(img_padded[0])-pad_amt-2):
-            s = 0
-            # grab the window
-            center_window = img_padded[y-1:y+2, x-1:x+2]
-            for window_y in (-1,0,1):
-                for window_x in (-1,0,1):
-                    new_window = img_padded[y+window_y-1:y+window_y+2, x+window_x-1:x+window_x+2]
+    padded_image = np.pad(image, ((2, 2), (2, 2)), mode='constant') # pad the image so it doesn't go out of bounds, 2 is good because of the 3x3 window, so that corners can be calculated for as well
+    height, width = padded_image.shape
 
-                    total = 0
-                    for r_index in range(len(center_window)):
-                        for c_index in range(len(new_window)):
-                            total += float(center_window[r_index][c_index]) - float(new_window[r_index][c_index])
-                    s_xy = total**2
-                    if s_xy > s:
-                        s = s_xy
-            if s > 55000:
-                feature_coords.append([x-pad_amt,y-pad_amt])
-    return feature_coords
+    # iterate over pixels in the new image
+    for y in range(4, height-4):
+        for x in range(4, width-4):
+            sw = 0
+
+            # my window
+            window = padded_image[y - 1:y + 2, x - 1:x + 2]
+
+            # will be used to calculate the sum of squared differences in all 8 directions
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    if dx == 0 and dy == 0: # skip the center pixel
+                        continue
+
+                    # get the window for the new pixel
+                    new_window = padded_image[y + dy - 1:y + dy + 2, x + dx - 1:x + dx + 2]
+
+                    # calculate the sum of squared differences
+                    ssd = 0
+                    for r_index in range(len(window)):
+                        for c_index in range(len(window)):
+                            ssd += (float(window[r_index][c_index]) - float(new_window[r_index][c_index]))
+                    ssd = ssd ** 2 # square the result
+
+                    if ssd > sw: # if the ssd is greater than the current sw, update sw
+                        sw = ssd
+
+            if sw > threshold:
+                keypoints.append([x - 2, y - 2]) # subtract 2 to get the original image coordinates
+
+    return keypoints
 
 def plot_keypoints(image, keypoints):
     """
@@ -96,11 +78,8 @@ def plot_keypoints(image, keypoints):
     :param keypoints:
     :return new_image:
     """
-    # create a copy of the image so that original isn't modified
-    return_image = image.copy()
-
-    # make return_image a color image
-    return_image = cv2.cvtColor(return_image, cv2.COLOR_GRAY2BGR)
+    # make image a color image
+    return_image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
 
     for x, y in keypoints:
         cv2.circle(return_image, (x, y), radius=1, color=(0, 0, 255), thickness=-1) # plot the circle
@@ -114,39 +93,38 @@ def extract_LBP(image, keypoint):
     :param keypoint:
     :return feature_vector:
     """
+    LBP_neighbors = [(1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1), (0, 1)]
+    window_radius = 8
+
     feature_vector = []
-
-    # get a 16x16 window around the keypoint, padding if necessary
     x, y = keypoint
-    # pad image first to avoid out of bounds error
-    padded_image = np.pad(image, ((8, 8), (8, 8)), mode='constant')
-    window = padded_image[y-8:y+8, x-8:x+8]
 
-    # iterate over the window
+    # pad the image
+    padded_image = np.pad(image, ((window_radius, window_radius), (window_radius, window_radius)), mode='edge')
+
+    # get the 16x16 window
+    window = padded_image[y - 8:y + 8, x - 8:x + 8]
+
+    # pad the window for when calculating around the window and it doesn't give us an out of bounds error
+    padded_window = np.pad(window, ((1, 1), (1, 1)), mode='edge')
+
     for i in range(16):
         for j in range(16):
-            # get the center pixel
-            center_pixel = window[i, j]
+            center = window[i, j]
             binary_string = ""
-            # iterate over the 3x3 window
-            for dx in [-1, 0, 1]:
-                for dy in [-1, 0, 1]:
-                    if dx == 0 and dy == 0:
-                        continue
-                    # get the pixel value
-                    pixel_y = i + dy + 8
-                    pixel_x = j + dx + 8
-                    # print(pixel_y, pixel_x, window.shape, window[pixel_y, pixel_x])
-                    pixel = window[pixel_y, pixel_x]
 
-                    if pixel >= center_pixel:
-                        binary_string += "1"
-                    else:
-                        binary_string += "0"
-            # convert the binary string to an integer
+            for index, (dx, dy) in enumerate(LBP_neighbors):
+                padded_y = i + dy + 1
+                padded_x = j + dx + 1
+                pixel = padded_window[padded_y, padded_x]
+
+                if pixel >= center:
+                    binary_string += "1"
+                else:
+                    binary_string += "0"
+
             feature_vector.append(int(binary_string, 2))
 
-    # create a histogram
     histogram = np.zeros(256)
     for value in feature_vector:
         histogram[value] += 1
@@ -154,7 +132,7 @@ def extract_LBP(image, keypoint):
     # normalize the histogram
     histogram = histogram / np.sum(histogram)
 
-    return histogram
+    return np.array(histogram)
 
 def extract_HOG(image, keypoint):
     """
@@ -163,7 +141,46 @@ def extract_HOG(image, keypoint):
     :param keypoint:
     :return feature_vector:
     """
-    return []
+    x, y = keypoint
+    cell_size = 8
+    block_size = 2 # num of cells in a block
+    num_bins = 9 # number of bins in the histogram
+
+    # calculate image gradients
+    i_x = np.gradient(image)[1]
+    i_y = np.gradient(image)[0]
+
+    # calculate the histogram
+    descriptor = []
+
+    # iterate over the window
+    for i in range(0, 16, cell_size):
+        for j in range(0, 16, cell_size):
+            cell_magnitude = []
+            cell_orientation = []
+
+            # Calculate gradients within cell
+            for k in range(cell_size):
+                for z in range(cell_size):
+                    cell_magnitude.append(math.sqrt(i_x[y + i + k, x + j + z] ** 2 + i_y[y + i + k, x + j + z] ** 2))
+                    cell_orientation.append(math.atan2(i_y[y + i + k, x + j + z], i_x[y + i + k, x + j + z]))
+
+            histogram = np.zeros(num_bins)
+            for magnitude, orientation in zip(cell_magnitude, cell_orientation):
+                bin_index = int(orientation / (2 * np.pi / num_bins))
+                histogram[bin_index] += magnitude
+
+            histogram /= np.linalg.norm(histogram) + 1e-5
+            descriptor.extend(histogram)
+
+    # normalize the descriptor
+    normalized_descriptor = []
+    for i in range(0, len(descriptor), block_size):
+        block = descriptor[i:i+block_size]
+        block /= np.linalg.norm(block) + 1e-5
+        normalized_descriptor.extend(block)
+
+    return np.array(normalized_descriptor)
 
 def feature_matching(image1, image2, detector, extractor):
     """
@@ -195,20 +212,22 @@ def feature_matching(image1, image2, detector, extractor):
         features1 = [extract_LBP(image1, keypoint) for keypoint in keypoints1]
         features2 = [extract_LBP(image2, keypoint) for keypoint in keypoints2]
     else:
-        features1 = [extract_HOG(image1, keypoint) for keypoint in keypoints1]
-        features2 = [extract_HOG(image2, keypoint) for keypoint in keypoints2]
+        padded_image1 = np.pad(image1, ((8, 8), (8, 8)), mode='constant')
+        padded_image2 = np.pad(image2, ((8, 8), (8, 8)), mode='constant')
+        features1 = [extract_HOG(padded_image1, keypoint) for keypoint in keypoints1]
+        features2 = [extract_HOG(padded_image2, keypoint) for keypoint in keypoints2]
 
     # perform feature matching
     matches = []
-    threshold = 0.1 # might change later
+    threshold = 2 # might change later
 
     for i, feature1 in enumerate(features1):
         best_match_index = None
         best_match_distance = float('inf')
 
         for j, feature2 in enumerate(features2):
-            # Compute distance between features
-            distance = abs(feature1 - feature2) # might change later
+            # Compute euclidean distance between the two features
+            distance = np.linalg.norm(feature1 - feature2)
 
             # Check if this distance is the best match so far
             if distance < best_match_distance:
@@ -235,10 +254,33 @@ def plot_matches(image1, image2, matches):
     :param matches:
     :return new_image:
     """
-    # create a new image, with image1 on the left and image2 on the right
-    result_image = np.zeros((max(image1.shape[0], image2.shape[0]), image1.shape[1] + image2.shape[1], 3), dtype=np.uint8)
+    # plot keypoints on each image
+    img1 = plot_keypoints(image1, matches[0])
+    img2 = plot_keypoints(image2, matches[1])
 
-    return image1
+    #rezise the images to the same size
+    max_height = max(img1.shape[0], img2.shape[0])
+
+    # blank image
+    result_image = np.zeros((max_height, img1.shape[1] + img2.shape[1], 3), dtype=np.uint8)
+
+    # combine the two images
+    result_image[:img1.shape[0], :img1.shape[1]] = img1
+
+    # plot black for blank space depending on the size of the images
+    if img1.shape[0] < img2.shape[0]:
+        result_image[:img2.shape[0], img1.shape[1]:] = img2
+        result_image[img1.shape[0]:, :img1.shape[1]] = (0, 0, 0)
+    else:
+        result_image[:img2.shape[0], img1.shape[1]:] = img2
+        result_image[img2.shape[0]:, img1.shape[1]:] = (0,0,0)
+
+    # plot the lines connecting the keypoints
+    for (x1, y1), (x2, y2) in zip(matches[0], matches[1]):
+        x2 += image1.shape[1] # shift the x coordinate of the second image
+        cv2.line(result_image, (x1, y1), (x2, y2), (0, 0, 255), 1) # plot the line
+
+    return result_image
 
 def harris_detector(image):
     """
@@ -246,4 +288,37 @@ def harris_detector(image):
     :param image:
     :return list:
     """
-    return []
+    # smooth the image first
+    smoothed_image = cv2.GaussianBlur(image, (5, 5), 0)
+
+    # compute the horizontal and vertical derivatives
+    i_x = cv2.Sobel(smoothed_image, cv2.CV_64F, 1, 0, ksize=3)
+    i_y = cv2.Sobel(smoothed_image, cv2.CV_64F, 0, 1, ksize=3)
+
+    # compute the products of the derivatives
+    i_x_squared = i_x ** 2
+    i_y_squared = i_y ** 2
+    i_x_i_y = i_x * i_y
+
+    # convolve the products with a Gaussian window
+    i_x_squared = cv2.GaussianBlur(i_x_squared, (5, 5), 0)
+    i_y_squared = cv2.GaussianBlur(i_y_squared, (5, 5), 0)
+    i_x_i_y = cv2.GaussianBlur(i_x_i_y, (5, 5), 0)
+
+    # compute R(aw)
+    R = np.zeros(image.shape) # initialize the R matrix
+    k = 0.04 # empirical constant
+    for y in range(image.shape[0]):
+        for x in range(image.shape[1]):
+            M = np.array([[i_x_squared[y, x], i_x_i_y[y, x]], [i_x_i_y[y, x], i_y_squared[y, x]]]) # create the M matrix
+            R[y, x] = np.linalg.det(M) - k * (np.trace(M) ** 2) # calculate the R value
+
+    # find the local maxima
+    keypoints = []
+    threshold = 0.5 * np.max(R) # threshold value
+    for y in range(1, image.shape[0] - 1):
+        for x in range(1, image.shape[1] - 1):
+            if R[y, x] > threshold and R[y, x] > R[y - 1, x - 1] and R[y, x] > R[y - 1, x] and R[y, x] > R[y - 1, x + 1] and R[y, x] > R[y, x - 1] and R[y, x] > R[y, x + 1] and R[y, x] > R[y + 1, x - 1] and R[y, x] > R[y + 1, x] and R[y, x] > R[y + 1, x + 1]:
+                keypoints.append([x, y])
+
+    return keypoints
