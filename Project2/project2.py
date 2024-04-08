@@ -98,11 +98,8 @@ def extract_LBP(image, keypoint):
     feature_vector = []
     x, y = keypoint
 
-    # pad the image
-    padded_image = np.pad(image, ((8, 8), (8, 8)), mode='edge')
-
     # get the 16x16 window
-    window = padded_image[y - 8:y + 8, x - 8:x + 8]
+    window = image[y - 8:y + 8, x - 8:x + 8]
 
     # pad the window for when calculating around the window and it doesn't give us an out of bounds error
     padded_window = np.pad(window, ((1, 1), (1, 1)), mode='edge')
@@ -206,13 +203,14 @@ def feature_matching(image1, image2, detector, extractor):
         keypoints1 = harris_detector(image1)
         keypoints2 = harris_detector(image2)
 
-    # extract features
+    # extract features, pad the image first, so that we don't have to do it ever time we call the function
+    padded_image1 = np.pad(image1, ((8, 8), (8, 8)), mode='constant')
+    padded_image2 = np.pad(image2, ((8, 8), (8, 8)), mode='constant')
     if extractor.lower() == "lbp":
-        features1 = [extract_LBP(image1, keypoint) for keypoint in keypoints1]
-        features2 = [extract_LBP(image2, keypoint) for keypoint in keypoints2]
+        features1 = [extract_LBP(padded_image1, keypoint) for keypoint in keypoints1]
+        features2 = [extract_LBP(padded_image2, keypoint) for keypoint in keypoints2]
     else:
-        padded_image1 = np.pad(image1, ((8, 8), (8, 8)), mode='constant')
-        padded_image2 = np.pad(image2, ((8, 8), (8, 8)), mode='constant')
+
         features1 = [extract_HOG(padded_image1, keypoint) for keypoint in keypoints1]
         features2 = [extract_HOG(padded_image2, keypoint) for keypoint in keypoints2]
 

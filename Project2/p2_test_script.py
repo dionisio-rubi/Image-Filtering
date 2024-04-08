@@ -8,12 +8,12 @@ import project2 as p2
 
 
 #Load and display image
-# img1 = p2.load_img("../images/test_img3.jpg")
-img1 = p2.load_img("../images/test_img1.png")
+img1 = p2.load_img("../images/test_img3.jpg")
+# img1 = p2.load_img("../images/test_img1.png")
 # img1 = p2.load_img("../images/ml3.png")
 # p2.display_img(img1)
-# img2 = p2.load_img("../images/test_img4.jpg")
-img2 = p2.load_img("../images/test_img2.png")
+img2 = p2.load_img("../images/test_img4.jpg")
+# img2 = p2.load_img("../images/test_img2.png")
 # img2 = p2.load_img("../images/ml4.png")
 # p2.display_img(img2)
 
