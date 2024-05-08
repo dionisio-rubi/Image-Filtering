@@ -4,7 +4,8 @@
 import cv2
 import numpy as np
 import math
-# import scikit
+from sklearn import svm
+from sklearn.cluster import KMeans
 
 def load_img(file_name):
     """
@@ -15,8 +16,6 @@ def load_img(file_name):
     # https://www.geeksforgeeks.org/python-opencv-cv2-imread-method/
     # used for greyscaling images
     return cv2.imread(file_name, cv2.IMREAD_GRAYSCALE)
-    # not greyscaling images
-    # return cv2.imread(file_name)
 
 def display_img(image):
     """
@@ -39,26 +38,25 @@ def generate_vocabulary(train_data_file):
     file_paths = [path.strip().split() for path in file_paths]
 
     # extract features from each image
-    features = []
+    descriptors = []
     for path in file_paths:
         image = load_img(path[0])
 
-        # use sift or corner detection to extract features
-        sift = cv2.xfeatures2d.SIFT_create()
-        keypoints, descriptors = sift.detectAndCompute(image, None)
+        # use SIFT to extract features
+        sift = cv2.SIFT_create()
 
-        #create visual vocabulary: taking features from sift create a small window around feature, get feature vector, add to features
-        for i in range(len(keypoints)):
-            x, y = keypoints[i].pt
-            x, y = int(x), int(y)
-            window = image[x-4:x+4, y-4:y+4]
-            features[0].append(window.flatten()) if path[1] == '0' else features[1].append(window.flatten())
+        _, desc = sift.detectAndCompute(image, None) # get descriptors
 
-    # convert features to numpy array
-    features = np.array(features)
-    print(features)
-    return features
+        descriptors.extend(desc)
 
+    # perform k-means clustering to create visual vocabulary
+    kmeans = KMeans(n_clusters=100)
+    kmeans.fit(descriptors)
+
+    # the cluster centers are our visual words
+    vocabulary = kmeans.cluster_centers_
+
+    return vocabulary
 
 def extract_features(image, vocabulary):
     """
@@ -67,8 +65,23 @@ def extract_features(image, vocabulary):
     :param vocabulary:
     :return:
     """
+    sift = cv2.SIFT_create()
 
-    pass
+    _, descriptors = sift.detectAndCompute(image, None) # get descriptors
+
+    # create a BOW count vector
+    bow_vector = np.zeros(len(vocabulary))
+    for desc in descriptors:
+        min_dist = np.inf
+        min_index = 0
+        for i, word in enumerate(vocabulary):
+            dist = np.linalg.norm(desc - word)
+            if dist < min_dist:
+                min_dist = dist
+                min_index = i
+        bow_vector[min_index] += 1
+
+    return bow_vector
 
 def train_classifier(train_data_file, vocab):
     """
@@ -77,8 +90,21 @@ def train_classifier(train_data_file, vocab):
     :param vocab:
     :return:
     """
+    # open and read file
+    file_paths = open(train_data_file, 'r').readlines()
+    file_paths = [path.strip().split() for path in file_paths]
 
-    pass
+    # train classifier
+    classifier = svm.SVC()
+    features = []
+    labels = []
+    for path in file_paths:
+        image = load_img(path[0])
+        features.append(extract_features(image, vocab))
+        labels.append(int(path[1]))  # ensure labels are numerical
+
+    classifier.fit(features, labels)
+    return classifier
 
 def classify_image(classifier, test_img, vocabulary):
     """
@@ -88,8 +114,17 @@ def classify_image(classifier, test_img, vocabulary):
     :param vocabulary:
     :return:
     """
+    # extract features from test image
+    features = extract_features(test_img, vocabulary)
 
-    pass
+    # classify image
+    prediction = classifier.predict([features])
+
+    # purpose of returning a string value, much nicer to see
+    # class_names = {0: 'Dog', 1: 'Cat'}
+    # return class_names[prediction[0]]
+
+    return prediction[0] # return numerical value, 0 = Dog, 1 = Cat
 
 # ~~~~~~~~~~~ Image Segmentation ~~~~~~~~~~~
 def threshold_image(image, low_thresh, high_thresh):
@@ -174,7 +209,7 @@ def split_regions(image):
         x, y, h, w = queue.pop(0)
         region = image[x:x+h, y:y+w]
 
-        # check if region is homogeneous
+        # check if region is homogeneous, if not split region into 4 quadrants
         if np.std(region) > 10 and h > 2 and w > 2:
             queue.append((x, y, h // 2, w // 2))
             queue.append((x + h // 2, y, h // 2, w // 2))
@@ -193,23 +228,31 @@ def merge_regions(image):
     :param image:
     :return:
     """
-    # have an empty image to store the region map
-    region_map = np.zeros_like(image)
+    # make region map
+    region_map = np.zeros_like(image, dtype=int)
 
-    # build region adjacency graph
-    region_adjacency = {}
+    # assign a unique label to each pixel
     for i in range(image.shape[0]):
         for j in range(image.shape[1]):
-            region_adjacency[(i, j)] = []
-            if i > 0:
-                region_adjacency[(i, j)].append((i - 1, j))
-            if i < image.shape[0] - 1:
-                region_adjacency[(i, j)].append((i + 1, j))
-            if j > 0:
-                region_adjacency[(i, j)].append((i, j - 1))
-            if j < image.shape[1] - 1:
-                region_adjacency[(i, j)].append((i, j + 1))
+            region_map[i, j] = i * image.shape[1] + j
 
+    # iterate over each pixel in the image
+    for i in range(image.shape[0]):
+        for j in range(image.shape[1]):
+
+            # iterate over the 4-connected neighborhood
+            for di, dj in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+                ni, nj = i + di, j + dj
+                # check if the neighbor is within the image bounds
+                if 0 <= ni < image.shape[0] and 0 <= nj < image.shape[1]:
+                    if region_map[i, j] != region_map[ni, nj]: # check if the neighbor belongs to a different region
+                        # calculate the intensity difference
+                        diff = abs(int(image[i, j]) - int(image[ni, nj]))
+
+                        if diff <= 10: # if the difference is below the threshold, merge the regions
+                            region_map[region_map == region_map[ni, nj]] = region_map[i, j]
+
+    region_map = region_map.astype(np.uint8) # convert to uint8 because i was getting an error
     return region_map
 
 def segment_image(image):
@@ -219,14 +262,48 @@ def segment_image(image):
     :return:
     """
 
-    pass
+    # Initialize an empty dictionary to store the segmentation maps
+    segmentation_maps = {}
+
+    # Apply thresholding
+    thresholded = threshold_image(image, 150, 200)
+    segmentation_maps['Thresholding'] = thresholded
+
+    # Apply region growing
+    region_grown = grow_regions(image)
+    segmentation_maps['Region Growing'] = region_grown
+
+    # Apply region merging
+    # region_merged = split_regions(image)
+    region_merged = merge_regions(image)
+    segmentation_maps['Region Merging'] = region_merged
+
+    return thresholded, region_grown, region_merged
 
 # ~~~~~~~~~~~ Image Segmentation with K-Means ~~~~~~~~~~~
 def kmeans_segment(image):
     """
-    Use Kmeans to perform image segmentation. You’re free to do this however you’d like. Do not assume the number of classes is 2. So you’ll want to implement a method for determining what k should be..
+    Use Kmeans to perform image segmentation. You’re free to do this however you’d like. Do not assume the number of classes is 2. So you’ll want to implement a method for determining what k should be.
     :param image:
     :return:
     """
+    # reshape the image to a 2D array of pixels
+    pixels = np.float32(image.reshape(-1, 1))
 
-    pass
+    # define the criteria
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.2)
+
+    # determine the optimal number of clusters
+    optimal_k = 3 # the higher the number, the better it looks, though 3 is a good ground
+
+    # apply kmeans
+    _, labels, centers = cv2.kmeans(pixels, optimal_k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+
+    centers = np.uint8(centers) # convert the centers to 8-bit values
+    labels = labels.flatten() # flatten the labels array
+
+    # convert the labels to the original shape
+    segmented_image = centers[labels.flatten()]
+    segmented_image = segmented_image.reshape(image.shape)
+
+    return segmented_image
